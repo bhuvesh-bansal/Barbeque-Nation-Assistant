@@ -1,23 +1,37 @@
-import { ChatState } from '../types';
+import { ChatState, Message, ChatStateType } from '../types';
 import { states, StateConfig } from '../config/stateMachine';
 import { locations } from '../config/locations';
+import { getFAQsByTags, searchFAQs } from '../config/faqs';
+import { menu, searchMenu } from '../config/menu';
+import { aiService } from '../api/aiService';
 
 export class StateMachine {
   private state: ChatState;
   private availableProperties: Set<string>;
+  private knowledgeBase: Map<string, string[]>;
+  private readonly states: { [key: string]: StateConfig };
 
-  constructor() {
-    this.state = {
-      currentState: 'START',
-      history: []
-    };
+  constructor(initialState: ChatState = { currentState: 'START', messages: [] }) {
+    this.state = initialState;
+    this.states = states;
     // Initialize with available locations from the locations config
     this.availableProperties = new Set(Object.keys(locations).map(key => key.toLowerCase()));
 
+    // Initialize knowledge base for common queries
+    this.knowledgeBase = new Map<string, string[]>([
+      ['menu', ['food', 'dish', 'starter', 'main course', 'dessert', 'ice cream', 'kulfi']],
+      ['pricing', ['cost', 'price', 'expensive', 'cheap', 'affordable', 'budget']],
+      ['booking', ['reserve', 'reservation', 'book', 'table', 'seats', 'availability']],
+      ['timing', ['hours', 'open', 'close', 'time', 'schedule', 'when']],
+      ['location', ['where', 'address', 'directions', 'located', 'find', 'nearest']],
+      ['offers', ['discount', 'offer', 'promotion', 'deal', 'special']],
+      ['dietary', ['vegetarian', 'vegan', 'halal', 'jain', 'allergy', 'gluten', 'non-veg']],
+    ]);
+
     // Initialize with the first message
-    this.state.history.push({
-      state: 'START',
-      input: '',
+    this.state.messages.push({
+      role: 'assistant',
+      content: this.getCurrentPrompt(),
       timestamp: Date.now()
     });
   }
@@ -31,265 +45,394 @@ export class StateMachine {
   }
 
   public getCurrentPrompt(): string {
-    const currentState = states[this.state.currentState];
-    if (!currentState) {
-      console.error(`Invalid state: ${this.state.currentState}`);
-      this.state.currentState = 'START';
-      return states.START.prompt;
+    const config = this.states[this.state.currentState];
+    if (!config) return "I apologize, but I'm not sure how to proceed.";
+
+    let prompt = config.prompt;
+    
+    // Replace placeholders with actual values
+    if (this.state.location) {
+      const locationDetails = this.getLocationDetails(this.state.location);
+      const locationName = locationDetails ? locationDetails.name : this.formatLocationName(this.state.location);
+      prompt = prompt.replace('{location}', locationName);
+    }
+    if (this.state.name) {
+      prompt = prompt.replace('{name}', this.state.name);
+    }
+    if (this.state.phoneNumber) {
+      prompt = prompt.replace('{phone}', this.formatPhoneNumber(this.state.phoneNumber));
+    }
+    if (this.state.dateTime) {
+      prompt = prompt.replace('{dateTime}', this.state.dateTime);
+    }
+    if (this.state.newDateTime) {
+      prompt = prompt.replace('{newDateTime}', this.state.newDateTime);
+    }
+    if (this.state.paxSize) {
+      prompt = prompt.replace('{paxSize}', this.state.paxSize.toString());
+    }
+    if (this.state.bookingRef) {
+      prompt = prompt.replace('{bookingRef}', this.state.bookingRef);
+    }
+    if (this.state.enquiryType && this.state.location) {
+      prompt = prompt.replace('{enquiryResponse}', this.getEnquiryResponse(this.state.enquiryType, this.state.location));
     }
 
-    // Replace placeholders in prompt with actual values
-    let prompt = currentState.prompt;
-    if (this.state.currentState === 'CONFIRM_DETAILS') {
-      prompt = prompt
-        .replace('{phone}', this.formatPhoneNumber(this.state.phoneNumber || ''))
-        .replace('{name_confirmation}', this.state.name ? `your name is ${this.state.name}` : 'you preferred not to provide your name');
-    } else if (this.state.currentState === 'CONFIRM_BOOKING') {
-      prompt = prompt
-        .replace('{dateTime}', this.state.dateTime || '')
-        .replace('{paxSize}', this.state.paxSize?.toString() || '')
-        .replace('{location}', this.state.location || '');
-    } else if (this.state.currentState === 'BOOKING_CONFIRMED') {
-      prompt = prompt.replace('{bookingRef}', this.state.bookingRef || 'BN' + Date.now().toString().slice(-6));
-    } else if (this.state.currentState === 'CONFIRM_MODIFICATION') {
-      prompt = prompt.replace('{newDateTime}', this.state.newDateTime || '');
-    } else if (this.state.currentState === 'PROVIDE_INFO') {
-      prompt = prompt.replace('{enquiryResponse}', this.getEnquiryResponse(this.state.enquiryType));
-    }
     return prompt;
   }
 
-  private formatPhoneNumber(phone: string): string {
-    return phone.replace(/(\d{4})(\d{3})(\d{3})/, '$1-$2-$3');
+  private formatLocationName(locationKey: string): string {
+    // Convert location key to a more readable format
+    // E.g., "delhi-connaught-place" -> "Delhi Connaught Place"
+    try {
+      const location = locations[locationKey.toLowerCase()];
+      if (location) {
+        return location.name;
+      }
+      
+      return locationKey
+        .split('-')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    } catch (e) {
+      return locationKey;
+    }
   }
 
-  private getEnquiryResponse(type: string | undefined): string {
-    const location = this.state.location ? locations[this.state.location.toLowerCase()] : undefined;
-    
-    if (!location) {
-      return "I apologize, but I couldn't find information for this location. Please try again.";
-    }
+  private formatPhoneNumber(phone: string): string {
+    const cleaned = phone.replace(/\D/g, '');
+    return `${cleaned.slice(0, 4)}-${cleaned.slice(4, 7)}-${cleaned.slice(7)}`;
+  }
 
-    switch (type) {
-      case '1':
-        return "Our unlimited buffet includes a wide variety of veg and non-veg starters, main course, and desserts. Please visit us to know the current pricing.";
-      case '2':
+  private generateBookingRef(): string {
+    return `BN${Math.floor(Math.random() * 1000000).toString().padStart(6, '0')}`;
+  }
+
+  private getLocationDetails(location: string) {
+    return locations[location.toLowerCase()];
+  }
+
+  private getEnquiryResponse(enquiryType: string, location: string): string {
+    const locationDetails = this.getLocationDetails(location);
+    if (!locationDetails) return "I apologize, but I don't have information about that location.";
+
+    switch (enquiryType) {
+      case '1': // Menu and pricing
+        return `Our menu includes a wide variety of starters, main course items, and desserts. Would you like to know about specific menu items?`;
+      case '2': // Offers
         const offers = [];
-        if (location.offers.complimentaryDrinks) offers.push(location.offers.complimentaryDrinks);
-        if (location.offers.foodFestival) offers.push("Ongoing food festival");
-        if (location.offers.earlyBird) offers.push("Early bird discounts available");
-        if (location.offers.buffetOffer) offers.push("Special buffet offers");
-        if (location.offers.armyOffer) offers.push("Special discounts for army personnel");
-        if (location.offers.drinksOffer) offers.push("Special drinks packages available");
-        return offers.length > 0 ? offers.join(". ") : "Currently, we don't have any ongoing special offers.";
-      case '3':
-        const timings = location.timings;
-        return `Our timings are:\n${Object.entries(timings).map(([day, time]) => 
+        if (locationDetails.offers.complimentaryDrinks) offers.push(locationDetails.offers.complimentaryDrinks);
+        if (locationDetails.offers.foodFestival) offers.push("Ongoing food festival");
+        if (locationDetails.offers.earlyBird) offers.push("Early bird discounts available");
+        if (locationDetails.offers.buffetOffer) offers.push("Special buffet offers");
+        if (locationDetails.offers.armyOffer) offers.push("Special discounts for army personnel");
+        if (locationDetails.offers.drinksOffer) offers.push("Special drinks packages available");
+        if (locationDetails.specialOffers?.earlyBird) offers.push(locationDetails.specialOffers.earlyBird);
+        if (locationDetails.specialOffers?.kittyParty) offers.push(`Kitty party offers available - ${locationDetails.specialOffers.kittyParty}`);
+        if (locationDetails.specialOffers?.student) offers.push(`Student offers available - ${locationDetails.specialOffers.student}`);
+        
+        return offers.length > 0 
+          ? `Current offers at ${locationDetails.name}:\n${offers.join("\n")}` 
+          : `Currently, we don't have any ongoing special offers at ${locationDetails.name}.`;
+      case '3': // Timings
+        const timings = locationDetails.timings;
+        return `Operating hours at ${locationDetails.name}:\n${Object.entries(timings).map(([day, time]) => 
           `${day}:\nLunch: ${time.lunch.opening} - ${time.lunch.closing} (Last entry: ${time.lunch.lastEntry})\nDinner: ${time.dinner.opening} - ${time.dinner.closing} (Last entry: ${time.dinner.lastEntry})`
         ).join('\n')}`;
-      case '4':
-        return `We are located at: ${location.address}\n\nNearest landmarks:\n${location.nearestOutlets.map(outlet => 
-          `${outlet.name} (${outlet.distance})`
-        ).join('\n')}`;
+      case '4': // Location
+        const nearestInfo = locationDetails.nearestOutlets.length > 0 
+          ? `\n\nNearest Barbeque Nation outlets:\n${locationDetails.nearestOutlets.map(outlet => 
+              `• ${outlet.name} (${outlet.distance}): ${outlet.address}`
+            ).join('\n')}`
+          : '';
+        
+        return `${locationDetails.name} is located at:\n${locationDetails.address}${nearestInfo}`;
       default:
-        return "I apologize, but I couldn't understand which information you're looking for. Could you please select from the options provided?";
+        return "I apologize, but I couldn't understand your query. Could you please rephrase it?";
     }
+  }
+
+  // Helper method to check if input is related to specific topics
+  private checkTopicRelevance(input: string): string | null {
+    const lowercaseInput = input.toLowerCase();
+    
+    // Fix for MapIterator error - convert to array entries first
+    const entries = Array.from(this.knowledgeBase.entries());
+    for (const [topic, keywords] of entries) {
+      if (keywords.some((keyword: string) => lowercaseInput.includes(keyword))) {
+        return topic;
+      }
+    }
+    
+    return null;
+  }
+
+  // Method to handle general inquiries without requiring state changes
+  private handleGeneralInquiry(input: string): string | null {
+    const lowercaseInput = input.toLowerCase();
+    
+    // Try to find an answer in FAQs first
+    const relevantFAQs = searchFAQs(input);
+    if (relevantFAQs.length > 0) {
+      return relevantFAQs[0].answer;
+    }
+    
+    // Check for menu related queries
+    if (lowercaseInput.includes('menu') || 
+        lowercaseInput.includes('food') || 
+        lowercaseInput.includes('dish') ||
+        lowercaseInput.includes('serve')) {
+      
+      // Check for specific items
+      const menuItems = searchMenu(input);
+      if (menuItems.length > 0) {
+        const itemNames = menuItems.map(item => item.name).join(', ');
+        return `Yes, we serve ${itemNames}. Is there anything specific you'd like to know about these items?`;
+      }
+      
+      // Generic menu response
+      return "Our menu features a variety of veg and non-veg starters, main course items, and desserts. We serve BASA fish, Zinga prawns, various kebabs, curries, and more. Would you like details about a specific category or dish?";
+    }
+    
+    // Check for location specific queries
+    if (lowercaseInput.includes('where') || 
+        lowercaseInput.includes('location') || 
+        lowercaseInput.includes('address')) {
+      
+      if (this.state.location) {
+        const locationData = locations[this.state.location.toLowerCase()];
+        if (locationData) {
+          return `${locationData.name} is located at: ${locationData.address}`;
+        }
+      }
+      
+      return "We have multiple locations across India. Could you specify which city you're interested in?";
+    }
+    
+    // No relevant general inquiry found
+    return null;
   }
 
   public async processInput(input: string): Promise<string> {
-    // Special handling for initial state
-    if (input === 'START') {
+    const config = this.states[this.state.currentState];
+    if (!config) {
+      return "How can I assist you today?";
+    }
+
+    const lowercaseInput = input.toLowerCase().trim();
+
+    try {
+      // Check for general inquiries at the START state
+      if (this.state.currentState === 'START') {
+        // See if the input is a location (Delhi or Bangalore)
+        if (lowercaseInput.includes('delhi') || lowercaseInput.includes('bangalore')) {
+          // Process normally for location selection
+          if (lowercaseInput.includes('delhi')) {
+            this.state.location = 'Delhi';
+          } else if (lowercaseInput.includes('bangalore')) {
+            this.state.location = 'Bangalore';
+          }
+          
+          // Move to the next state
+          const nextState = (config.transitions[lowercaseInput] || config.transitions['*']) as ChatStateType;
+          this.state.currentState = nextState;
+          return this.getCurrentPrompt();
+        } 
+        
+        // Check if it's a general inquiry about services/offerings
+        const intentCategory = this.getIntentCategory(lowercaseInput);
+        if (intentCategory) {
+          // Provide a general response but stay in the START state
+          return this.getGeneralInquiryResponse(intentCategory);
+        }
+      }
+
+      // Get AI analysis of the input
+      const aiResponse = await aiService.analyzeQuery({
+        query: input,
+        context: {
+          currentState: this.state.currentState,
+          location: this.state.location,
+          previousIntent: this.state.enquiryType,
+          customerPreferences: []
+        }
+      });
+
+      // Use AI for validation if confidence is high
+      if (aiResponse.confidence > 0.8) {
+        // Extract entities from AI response
+        if (aiResponse.entities.city) {
+          this.state.location = this.formatLocationName(aiResponse.entities.city);
+        }
+        if (aiResponse.entities.name) {
+          this.state.name = aiResponse.entities.name;
+        }
+        if (aiResponse.entities.phone) {
+          this.state.phoneNumber = aiResponse.entities.phone;
+        }
+        if (aiResponse.entities.datetime) {
+          this.state.dateTime = aiResponse.entities.datetime;
+        }
+        if (aiResponse.entities.pax) {
+          this.state.paxSize = parseInt(aiResponse.entities.pax);
+        }
+
+        // If AI suggests a valid next state, use it
+        const suggestedState = aiResponse.entities.suggestedState as ChatStateType;
+        if (suggestedState && this.states[suggestedState]) {
+          this.state.currentState = suggestedState;
+          return aiResponse.suggestedResponse || this.getCurrentPrompt();
+        }
+      }
+
+      // Fall back to rule-based validation if AI confidence is low
+      if (config.validation && !config.validation(lowercaseInput)) {
+        if (this.state.currentState === 'START') {
+          return "Please select either Delhi or Bangalore to proceed.";
+        }
+        if (this.state.currentState === 'VERIFY_LOCATION') {
+          return "Please respond with 'yes' or 'no' to confirm the location.";
+        }
+        return `That's not a valid input. ${this.getCurrentPrompt()}`;
+      }
+
+      // Process input based on current state
+      switch (this.state.currentState) {
+        case 'START':
+          if (lowercaseInput.includes('delhi')) {
+            this.state.location = 'Delhi';
+          } else if (lowercaseInput.includes('bangalore')) {
+            this.state.location = 'Bangalore';
+          }
+          break;
+
+        case 'VERIFY_LOCATION':
+          if (lowercaseInput === 'no') {
+            this.state.location = undefined;
+          }
+          break;
+
+        case 'COLLECT_NAME':
+          this.state.name = input;
+          break;
+
+        case 'COLLECT_PHONE':
+          this.state.phoneNumber = input.replace(/\D/g, '');
+          break;
+
+        case 'DISCOVER':
+          this.state.enquiryType = input;
+          if (['5', '6', '7'].includes(input)) {
+            this.state.actionType = input === '5' ? 'new' : input === '6' ? 'modify' : 'cancel';
+          }
+          break;
+
+        case 'COLLECT_DATE_TIME':
+          this.state.dateTime = input;
+          break;
+
+        case 'COLLECT_NEW_DATE_TIME':
+          this.state.newDateTime = input;
+          break;
+
+        case 'COLLECT_PAX_SIZE':
+          this.state.paxSize = parseInt(input);
+          break;
+
+        case 'BOOKING_CONFIRMED':
+          if (!this.state.bookingRef) {
+            this.state.bookingRef = this.generateBookingRef();
+          }
+          break;
+
+        case 'COLLECT_BOOKING_REF':
+          this.state.bookingRef = input;
+          break;
+      }
+
+      // Execute any additional actions
+      if (config.action) {
+        await config.action(this.state, input);
+      }
+
+      // Determine next state
+      const nextState = (config.transitions[lowercaseInput] || config.transitions['*']) as ChatStateType;
+      this.state.currentState = nextState;
+
+      // If AI provided a good response for this state, use it
+      if (aiResponse.suggestedResponse && aiResponse.confidence > 0.8) {
+        return aiResponse.suggestedResponse;
+      }
+
+      // Fall back to template response
+      return this.getCurrentPrompt();
+
+    } catch (error) {
+      console.error('Error processing input:', error);
+      // Fall back to rule-based processing if AI fails
       return this.getCurrentPrompt();
     }
-
-    const currentState = states[this.state.currentState];
-    if (!currentState) {
-      console.error(`Invalid state: ${this.state.currentState}`);
-      this.state.currentState = 'START';
-      return states.START.prompt;
-    }
-
-    // Validate input if validation function exists
-    if (currentState.validation && !currentState.validation(input)) {
-      return currentState.prompt;
-    }
-
-    // Determine next state based on input
-    let nextState = '';
-    switch (this.state.currentState) {
-      case 'START':
-        const location = input.toLowerCase().trim();
-        nextState = 'VERIFY_LOCATION';
-        this.state.location = location;
-        break;
-
-      case 'VERIFY_LOCATION':
-        nextState = this.availableProperties.has(this.state.location?.toLowerCase() || '')
-          ? 'COLLECT_NAME'
-          : 'LOCATION_NOT_FOUND';
-        break;
-
-      case 'LOCATION_NOT_FOUND':
-        nextState = input.toLowerCase() === 'yes' ? 'START' : 'END';
-        break;
-
-      case 'COLLECT_NAME':
-        if (input.toLowerCase() === 'no' || input.toLowerCase() === 'skip') {
-          nextState = 'COLLECT_PHONE';
-          this.state.name = undefined;
-        } else {
-          nextState = 'COLLECT_PHONE';
-          this.state.name = input;
-        }
-        break;
-
-      case 'COLLECT_PHONE':
-        if (/^\d{10}$/.test(input)) {
-          this.state.phoneNumber = input;
-          nextState = 'CONFIRM_DETAILS';
-        } else {
-          return "I apologize, but I need a valid 10-digit phone number. Could you please provide it again?";
-        }
-        break;
-
-      case 'CONFIRM_DETAILS':
-        nextState = input.toLowerCase() === 'yes' ? 'DISCOVER' : 'COLLECT_NAME';
-        break;
-
-      case 'DISCOVER':
-        switch (input) {
-          case '1':
-            nextState = 'COLLECT_DATE_TIME_NEW';
-            break;
-          case '2':
-          case '3':
-            nextState = 'COLLECT_BOOKING_REF';
-            this.state.actionType = input === '2' ? 'MODIFY' : 'CANCEL';
-            break;
-          case '4':
-            nextState = 'HANDLE_ENQUIRY';
-            break;
-          default:
-            return "Please select a valid option (1-4).";
-        }
-        break;
-
-      case 'COLLECT_DATE_TIME_NEW':
-        this.state.dateTime = input;
-        nextState = 'COLLECT_PAX_SIZE';
-        break;
-
-      case 'COLLECT_PAX_SIZE':
-        const paxSize = parseInt(input);
-        if (isNaN(paxSize) || paxSize <= 0) {
-          return "Please provide a valid number of guests.";
-        }
-        this.state.paxSize = paxSize;
-        nextState = 'CONFIRM_BOOKING';
-        break;
-
-      case 'CONFIRM_BOOKING':
-        switch (input.toLowerCase()) {
-          case 'yes':
-            nextState = 'BOOKING_CONFIRMED';
-            this.state.bookingRef = 'BN' + Date.now().toString().slice(-6);
-            break;
-          case 'no':
-            nextState = 'DISCOVER';
-            break;
-          case 'modify':
-            nextState = 'COLLECT_DATE_TIME_NEW';
-            break;
-          default:
-            return "Please confirm with 'yes' or 'no', or say 'modify' to change the details.";
-        }
-        break;
-
-      case 'COLLECT_BOOKING_REF':
-        // Simple validation for booking reference
-        if (/^BN\d{6}$/.test(input)) {
-          this.state.bookingRef = input;
-          nextState = 'VERIFY_BOOKING';
-        } else {
-          nextState = 'BOOKING_NOT_FOUND';
-        }
-        break;
-
-      case 'VERIFY_BOOKING':
-        switch (input.toLowerCase()) {
-          case 'modify':
-            nextState = 'COLLECT_DATE_TIME_MOD';
-            break;
-          case 'cancel':
-            nextState = 'CONFIRM_CANCELLATION';
-            break;
-          case 'back':
-            nextState = 'DISCOVER';
-            break;
-          default:
-            return "Please select 'modify', 'cancel', or 'back'.";
-        }
-        break;
-
-      case 'COLLECT_DATE_TIME_MOD':
-        this.state.newDateTime = input;
-        nextState = 'CONFIRM_MODIFICATION';
-        break;
-
-      case 'CONFIRM_MODIFICATION':
-      case 'CONFIRM_CANCELLATION':
-        nextState = input.toLowerCase() === 'yes' 
-          ? (this.state.currentState === 'CONFIRM_MODIFICATION' ? 'MODIFICATION_CONFIRMED' : 'CANCELLATION_CONFIRMED')
-          : 'VERIFY_BOOKING';
-        break;
-
-      case 'HANDLE_ENQUIRY':
-        if (['1', '2', '3', '4'].includes(input)) {
-          this.state.enquiryType = input;
-          nextState = 'PROVIDE_INFO';
-        } else {
-          return "Please select a valid option (1-4).";
-        }
-        break;
-
-      case 'PROVIDE_INFO':
-      case 'MODIFICATION_CONFIRMED':
-      case 'BOOKING_CONFIRMED':
-      case 'CANCELLATION_CONFIRMED':
-      case 'END':
-        nextState = input.toLowerCase() === 'yes' ? 'DISCOVER' : 'FINAL';
-        break;
-
-      default:
-        nextState = currentState.transitions.NEXT || currentState.transitions.BACK;
-    }
-
-    // Log state transition
-    this.state.history.push({
-      state: this.state.currentState,
-      input,
-      timestamp: Date.now()
-    });
-
-    // Update current state
-    this.state.currentState = nextState || this.state.currentState;
-
-    // Execute action if it exists
-    if (states[this.state.currentState].action) {
-      await states[this.state.currentState].action!(this.state, input);
-    }
-
-    return this.getCurrentPrompt();
   }
 
   public reset(): void {
     this.state = {
       currentState: 'START',
-      history: [{
-        state: 'START',
-        input: '',
+      messages: [{
+        role: 'assistant',
+        content: this.getCurrentPrompt(),
         timestamp: Date.now()
       }]
     };
+  }
+
+  // Check if input contains any of the provided keywords
+  private matchesIntent(input: string, keywords: string[]): boolean {
+    const lowercaseInput = input.toLowerCase();
+    return keywords.some(keyword => lowercaseInput.includes(keyword));
+  }
+
+  // Get the category with the highest number of matching keywords
+  private getIntentCategory(input: string): string | null {
+    let bestCategory = null;
+    let maxMatches = 0;
+
+    for (const [category, keywords] of this.knowledgeBase.entries()) {
+      const matches = keywords.filter(keyword => input.toLowerCase().includes(keyword)).length;
+      if (matches > maxMatches) {
+        maxMatches = matches;
+        bestCategory = category;
+      }
+    }
+
+    return maxMatches > 0 ? bestCategory : null;
+  }
+
+  // Get a response for a general inquiry
+  private getGeneralInquiryResponse(category: string): string {
+    switch (category) {
+      case 'menu':
+        return "I'd be happy to tell you about our menu! We offer a variety of starters, main courses and desserts, including both vegetarian and non-vegetarian options. Our buffet includes grilled starters, main course dishes, and desserts. To see specific menu items for a location, please first tell me which city you're interested in - Delhi or Bangalore?";
+      
+      case 'pricing':
+        return "Our pricing varies by location. The typical cost for our buffet is between ₹800-1500 per person depending on the time of visit and specific outlet. For exact pricing at a particular location, please let me know which city you're interested in - Delhi or Bangalore?";
+      
+      case 'booking':
+        return "I'd be happy to help you make a reservation! To check availability and book a table, I'll need to know which city you're interested in first - Delhi or Bangalore?";
+      
+      case 'timing':
+        return "Our restaurants are typically open for lunch from 12:00 PM to 4:00 PM and dinner from 6:00/6:30 PM to 11:00/11:55 PM. Opening hours may vary slightly by location. To check the exact timings for a specific outlet, please tell me which city you're interested in - Delhi or Bangalore?";
+      
+      case 'location':
+        return "We have multiple outlets in both Delhi and Bangalore. To see the list of specific locations with addresses, please tell me which city you're interested in - Delhi or Bangalore?";
+      
+      case 'offers':
+        return "We have various offers including Early Bird discounts, special promotions for large groups (5+ people), and student discounts at select locations. For current offers at a specific outlet, please let me know which city you're interested in - Delhi or Bangalore?";
+      
+      case 'dietary':
+        return "We cater to various dietary preferences with a wide selection of vegetarian and non-vegetarian dishes. Our buffet includes veg starters like Cajun Spice Potato, Mushroom, and Paneer, as well as non-veg options like Chicken Tangdi and Fish. For the complete menu at a specific location, please tell me which city you're interested in - Delhi or Bangalore?";
+      
+      default:
+        return "I'd be happy to help you with information about our restaurants. To get started, please tell me which city you're interested in - Delhi or Bangalore?";
+    }
   }
 } 

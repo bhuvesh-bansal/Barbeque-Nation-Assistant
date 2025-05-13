@@ -1,87 +1,241 @@
-import { ChatState, Message, PostCallAnalysis } from '../types';
+import { ChatState, ConversationLog } from '../types';
 import { StateMachine } from '../lib/stateMachine';
+import { google } from 'googleapis';
+import { GoogleSheetsLogger } from '../lib/googleSheets';
 
 export class ChatService {
-  private messages: Message[];
   private stateMachine: StateMachine;
-
+  private sheetsLogger: GoogleSheetsLogger | null = null;
+  
   constructor() {
-    this.messages = [];
     this.stateMachine = new StateMachine();
-  }
-
-  private async logToAnalytics(state: ChatState): Promise<void> {
-    try {
-      const analysis: PostCallAnalysis = {
-        outcome: state.currentState,
-        call_time: Date.now() - this.messages[0].timestamp,
-        call_status: 'completed',
-        call_transcript: this.messages.map(m => `${m.role}: ${m.content}`).join('\n'),
-        location: state.location || '',
-        name: state.name,
-        phone_number: state.phoneNumber,
-        booking_ref: state.bookingRef,
-        date_time: state.dateTime,
-        pax_size: state.paxSize,
-        action_type: state.actionType,
-        metadata: {},
-        questions_asked: this.messages
-          .filter(m => m.role === 'assistant')
-          .map(m => m.content)
-      };
-
-      await fetch('/api/log-conversation', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(analysis)
+    this.initializeGoogleSheets();
+    
+    // Handle window beforeunload event to log conversations when window is closed
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', () => {
+        this.logConversationOnClose();
       });
+    }
+  }
+  
+  private async initializeGoogleSheets(): Promise<void> {
+    try {
+      const credentials = JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS || '{}');
+      const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+      
+      if (!credentials || !spreadsheetId) {
+        console.warn('Google Sheets credentials or spreadsheet ID not configured');
+        return;
+      }
+      
+      this.sheetsLogger = new GoogleSheetsLogger(credentials, spreadsheetId);
+      await this.sheetsLogger.initializeSheet();
+      console.log('Google Sheets logger initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize Google Sheets logger:', error);
+      this.sheetsLogger = null;
+    }
+  }
+  
+  public async processMessage(userInput: string): Promise<string> {
+    // Process the message through the state machine
+    return this.stateMachine.processInput(userInput);
+  }
+  
+  public getCurrentState(): ChatState {
+    return this.stateMachine.getState();
+  }
+  
+  public reset(): void {
+    // Log the conversation before resetting
+    this.logConversation();
+    this.stateMachine.reset();
+  }
+  
+  // This method will be called when the conversation is over
+  public async endConversation(): Promise<void> {
+    await this.logConversation();
+    this.reset();
+  }
+  
+  // This method logs the conversation when the window is closed
+  private logConversationOnClose(): void {
+    const state = this.stateMachine.getState();
+    
+    // Only log if there was an actual conversation (more than just the initial message)
+    if (state.messages.length > 1) {
+      // Use a synchronous approach for beforeunload
+      const log = this.createConversationLog();
+      
+      // Store temporarily in localStorage for retry on next visit
+      try {
+        const failedLogs = JSON.parse(localStorage.getItem('pendingLogs') || '[]');
+        failedLogs.push({
+          log,
+          timestamp: new Date().toISOString()
+        });
+        localStorage.setItem('pendingLogs', JSON.stringify(failedLogs));
+      } catch (e) {
+        console.error('Failed to store pending log:', e);
+      }
+      
+      // Attempt to use the sendBeacon API if available
+      if (navigator.sendBeacon) {
+        const data = new FormData();
+        data.append('log', JSON.stringify(log));
+        navigator.sendBeacon('/api/log-conversation', data);
+      }
+    }
+  }
+  
+  // Check and process any pending logs from previous sessions
+  public async processPendingLogs(): Promise<void> {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const pendingLogsJSON = localStorage.getItem('pendingLogs');
+      if (!pendingLogsJSON) return;
+      
+      const pendingLogs = JSON.parse(pendingLogsJSON);
+      if (pendingLogs.length === 0) return;
+      
+      let successCount = 0;
+      const remaining = [];
+      
+      for (const item of pendingLogs) {
+        try {
+          await this.logConversationToSheet(item.log);
+          successCount++;
+        } catch (e) {
+          remaining.push(item);
+        }
+      }
+      
+      if (remaining.length > 0) {
+        localStorage.setItem('pendingLogs', JSON.stringify(remaining));
+      } else {
+        localStorage.removeItem('pendingLogs');
+      }
+      
+      console.log(`Processed ${successCount} pending logs, ${remaining.length} remaining`);
+    } catch (e) {
+      console.error('Error processing pending logs:', e);
+    }
+  }
+  
+  public async logConversation(phoneNumber?: string): Promise<boolean> {
+    const log = this.createConversationLog(phoneNumber);
+    return this.logConversationToSheet(log);
+  }
+  
+  private createConversationLog(phoneNumber?: string): ConversationLog {
+    const state = this.stateMachine.getState();
+    
+    // Generate conversation summary
+    const summary = this.generateConversationSummary(state);
+    
+    // Map the chat state to the conversation log
+    return {
+      modality: 'Chatbot',
+      callTime: new Date().toISOString(),
+      phoneNumber: phoneNumber || state.phoneNumber || 'NA',
+      callOutcome: this.determineCallOutcome(state),
+      roomName: state.location || 'NA',
+      bookingDate: state.dateTime || 'NA',
+      bookingTime: state.dateTime ? '12:00' : 'NA', // Default time if not specified
+      numberOfGuests: state.paxSize || 0,
+      customerName: state.name || 'NA',
+      callSummary: summary
+    };
+  }
+  
+  private async logConversationToSheet(log: ConversationLog): Promise<boolean> {
+    try {
+      if (!this.sheetsLogger) {
+        console.warn('Google Sheets logger not initialized');
+        return false;
+      }
+      
+      await this.sheetsLogger.logConversation(log);
+      return true;
     } catch (error) {
       console.error('Failed to log conversation:', error);
+      return false;
     }
   }
-
-  public async processInput(input: string): Promise<string> {
-    // Log user input
-    this.messages.push({
-      role: 'user',
-      content: input,
-      timestamp: Date.now()
-    });
-
-    // Process input through state machine
-    const response = await this.stateMachine.processInput(input);
+  
+  private determineCallOutcome(state: ChatState): 'ENQUIRY' | 'ROOM_AVAILABILITY' | 'POST_BOOKING' | 'MISC' {
+    if (state.enquiryType === '1' || state.enquiryType === '2' || state.enquiryType === '3' || state.enquiryType === '4') {
+      return 'ENQUIRY';
+    }
     
-    // Log assistant response
-    this.messages.push({
-      role: 'assistant',
-      content: response,
-      timestamp: Date.now()
-    });
-
-    // If we've reached a final state, log the conversation
-    const currentState = this.stateMachine.getCurrentState();
-    if (currentState === 'FINAL' || 
-        currentState === 'BOOKING_CONFIRMED' || 
-        currentState === 'MODIFICATION_CONFIRMED' || 
-        currentState === 'CANCELLATION_CONFIRMED') {
-      await this.logToAnalytics(this.stateMachine.getState());
+    if (state.actionType === 'new') {
+      return 'ROOM_AVAILABILITY';
     }
-
-    return response;
+    
+    if (state.actionType === 'modify' || state.actionType === 'cancel') {
+      return 'POST_BOOKING';
+    }
+    
+    return 'MISC';
   }
-
-  public getCurrentState(): string {
-    return this.stateMachine.getCurrentState();
+  
+  private generateConversationSummary(state: ChatState): string {
+    const messages = state.messages || [];
+    
+    if (messages.length === 0) {
+      return 'No conversation to summarize.';
+    }
+    
+    // Get last few messages for context
+    const recentMessages = messages.slice(-5);
+    
+    // Build summary based on conversation state
+    let summary = '';
+    
+    if (state.location) {
+      summary += `The user was interested in the ${state.location} location. `;
+    }
+    
+    if (state.dateTime) {
+      summary += `They were looking for a booking on ${state.dateTime}. `;
+    }
+    
+    if (state.paxSize) {
+      summary += `For a party of ${state.paxSize} people. `;
+    }
+    
+    if (state.actionType) {
+      switch (state.actionType) {
+        case 'new':
+          summary += 'They wanted to make a new booking. ';
+          break;
+        case 'modify':
+          summary += 'They wanted to modify an existing booking. ';
+          break;
+        case 'cancel':
+          summary += 'They wanted to cancel an existing booking. ';
+          break;
+      }
+    }
+    
+    if (state.bookingRef) {
+      summary += `Reference: ${state.bookingRef}. `;
+    }
+    
+    // Add outcome
+    if (state.currentState === 'BOOKING_CONFIRMED') {
+      summary += 'The booking was successfully confirmed.';
+    } else if (state.currentState === 'BOOKING_FAILED') {
+      summary += 'The booking attempt failed.';
+    } else {
+      summary += `The conversation ended in the ${state.currentState} state.`;
+    }
+    
+    return summary;
   }
+}
 
-  public getMessages(): Message[] {
-    return this.messages;
-  }
-
-  public reset(): void {
-    this.stateMachine.reset();
-    this.messages = [];
-  }
-} 
+// Export a singleton instance
+export const chatService = new ChatService(); 

@@ -1,0 +1,25 @@
+category,sub_category,item_name,description,price,is_spicy,is_veg,allergens,availability
+Starters,Veg,Paneer Tikka,Marinated cottage cheese chunks grilled to perfection,350,Yes,Yes,Dairy,All Days
+Starters,Veg,Mushroom Seekh Kebab,Minced mushrooms with herbs and spices shaped into kebabs,320,No,Yes,None,All Days
+Starters,Veg,Cajun Spice Potatoes,Crispy potato wedges with cajun spices,250,Yes,Yes,None,All Days
+Starters,Veg,Crispy Corn,Deep fried corn kernels tossed with spices,280,Yes,Yes,None,All Days
+Starters,Non-Veg,Chicken Tikka,Boneless chicken marinated in yogurt and spices,420,Yes,No,Dairy,All Days
+Starters,Non-Veg,Fish Tikka,Fish cubes marinated in spices and grilled,480,Yes,No,Fish,All Days
+Starters,Non-Veg,Mutton Seekh Kebab,Minced mutton with herbs and spices,450,Yes,No,None,All Days
+Starters,Non-Veg,Garlic Prawns,Prawns tossed in garlic butter sauce,520,No,No,"Shellfish, Dairy",All Days
+Main Course,Veg,Dal Makhani,Black lentils slow cooked with butter and cream,380,No,Yes,Dairy,All Days
+Main Course,Veg,Paneer Butter Masala,Cottage cheese cubes in creamy tomato sauce,420,No,Yes,Dairy,All Days
+Main Course,Veg,Veg Biryani,Fragrant rice with mixed vegetables and spices,350,Yes,Yes,None,All Days
+Main Course,Veg,Mixed Veg Curry,Assorted vegetables in a flavorful gravy,300,Yes,Yes,None,All Days
+Main Course,Non-Veg,Butter Chicken,Tandoori chicken pieces in a creamy tomato sauce,450,No,No,Dairy,All Days
+Main Course,Non-Veg,Mutton Rogan Josh,Slow cooked mutton in a rich gravy with Kashmiri spices,520,Yes,No,None,All Days
+Main Course,Non-Veg,Chicken Biryani,Fragrant basmati rice layered with marinated chicken,420,Yes,No,None,All Days
+Main Course,Non-Veg,Fish Curry,Fish pieces simmered in a tangy coconut curry,480,Yes,No,Fish,All Days
+Desserts,Sweet,Gulab Jamun,Deep-fried milk solids soaked in sugar syrup,220,No,Yes,Dairy,All Days
+Desserts,Sweet,Rasgulla,Cheese balls soaked in sugar syrup,200,No,Yes,Dairy,All Days
+Desserts,Sweet,Kulfi,Traditional Indian ice cream with nuts,250,No,Yes,"Dairy, Nuts",All Days
+Desserts,Sweet,Chocolate Brownie,Warm chocolate brownie with ice cream,320,No,Yes,"Dairy, Gluten, Eggs",All Days
+Beverages,Cold,Fresh Lime Soda,Refreshing lime juice with soda water,150,No,Yes,None,All Days
+Beverages,Cold,Mango Lassi,Yogurt drink with mango pulp,180,No,Yes,Dairy,All Days
+Beverages,Hot,Masala Chai,Spiced Indian tea with milk,120,No,Yes,Dairy,All Days
+Beverages,Hot,Filter Coffee,South Indian style coffee,140,No,Yes,Dairy,All Days 

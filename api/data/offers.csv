@@ -1,0 +1,13 @@
+offer_id,restaurant,offer_name,description,validity_start,validity_end,discount_percentage,discount_type,min_bill_amount,max_discount,coupon_code,terms_conditions
+1,BBQ Nation Connaught Place,Early Bird Special,20% off on lunch buffet when you book between 12-1 PM,2023-05-01,2023-12-31,20,percentage,0,500,EARLYBBQ,"Valid only for lunch, Not valid on weekends and public holidays"
+2,BBQ Nation Connaught Place,Weekend Family Special,Free dessert platter for tables of 4 or more,2023-05-01,2023-12-31,0,freebie,1500,0,FAMILYBBQ,"Valid only on weekends, Not valid with other offers"
+3,BBQ Nation Vasant Kunj,Birthday Celebration,Complimentary cake and 15% off for the birthday person,2023-05-01,2023-12-31,15,percentage,1000,1000,BDAYBBQ,"ID proof required, Valid only on the birthday week"
+4,BBQ Nation Vasant Kunj,Corporate Lunch,25% off on group bookings of 10 or more people on weekdays,2023-05-01,2023-12-31,25,percentage,5000,5000,CORPBBQ,"Prior reservation required, Valid only on weekdays"
+5,BBQ Nation Unity Mall Janakpuri,Student Discount,15% discount for students with valid ID,2023-05-01,2023-12-31,15,percentage,0,300,STUDBBQ,"Valid ID must be presented, One card valid for one person only"
+6,BBQ Nation Unity Mall Janakpuri,Happy Hours,Buy 1 Get 1 free on select drinks between 6-8 PM,2023-05-01,2023-12-31,0,bogo,0,0,HAPPYBBQ,"Valid only on select beverages, Not valid on weekends"
+7,All Delhi Locations,Armed Forces Special,15% discount for Armed Forces personnel with valid ID,2023-05-01,2023-12-31,15,percentage,0,1000,ARMEDBBQ,"Valid ID must be presented, Valid for the personnel and family"
+8,All Delhi Locations,Unlimited Kebabs,Extended kebab serving time for dinner on Thursdays,2023-05-01,2023-12-31,0,freebie,0,0,KEBABBBQ,"Valid only on Thursday dinners, Subject to availability"
+9,All Bangalore Locations,Masala Wednesday,25% off on all buffets every Wednesday,2023-05-01,2023-12-31,25,percentage,0,500,WEDBBQ,"Valid only on Wednesdays, Cannot be combined with other offers"
+10,All Bangalore Locations,Kitty Party Special,Complimentary welcome drinks and 10% off for groups of 8+,2023-05-01,2023-12-31,10,percentage,4000,2000,KITTYBBQ,"Advance booking required, Not valid on weekends and holidays"
+11,All Locations,First Time App User,Flat Rs. 200 off on first booking through app,2023-05-01,2023-12-31,0,flat,1000,200,APPBBQ,"Valid only for first time app users, Cannot be combined with other offers"
+12,All Locations,Anniversary Special,Complimentary bottle of wine for couples celebrating anniversary,2023-05-01,2023-12-31,0,freebie,2000,0,ANNIBBQ,"Marriage certificate/proof required, Prior booking required" 

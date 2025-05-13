@@ -1,4 +1,4 @@
-import { locations } from './locations';
+import { ChatState } from '../types';
 
 export interface StateConfig {
   prompt: string;
@@ -6,43 +6,58 @@ export interface StateConfig {
     [key: string]: string;
   };
   validation?: (input: string) => boolean;
+  action?: (state: ChatState, input: string) => Promise<void>;
 }
 
 export const states: { [key: string]: StateConfig } = {
   START: {
-    prompt: "Hi! I'm your Barbeque Nation Assistant. Which city would you like to explore our restaurants in?",
+    prompt: "Welcome to Barbeque Nation! Which city would you like to dine in - Delhi or Bangalore?",
     transitions: {
       '*': 'VERIFY_LOCATION'
-    }
-  },
-  VERIFY_LOCATION: {
-    prompt: "Great! Let me check the availability in {location}.",
-    transitions: {
-      'AVAILABLE': 'COLLECT_NAME',
-      'NOT_AVAILABLE': 'START'
-    }
-  },
-  COLLECT_NAME: {
-    prompt: "I'd be happy to help you with information about our {location} outlet. Could you please share your name?",
-    transitions: {
-      '*': 'COLLECT_PHONE'
-    }
-  },
-  COLLECT_PHONE: {
-    prompt: "Thank you, {name}! Could you please share your phone number?",
-    transitions: {
-      '*': 'CONFIRM_DETAILS'
     },
-    validation: (input: string) => /^\d{10}$/.test(input)
+    validation: (input: string) => {
+      const lowercaseInput = input.toLowerCase();
+      return lowercaseInput.includes('delhi') || lowercaseInput.includes('bangalore');
+    }
   },
-  CONFIRM_DETAILS: {
-    prompt: "Perfect! Just to confirm - your name is {name} and phone number is {phone}. Is this correct? (Yes/No)",
+  
+  VERIFY_LOCATION: {
+    prompt: "You're looking for a restaurant in {location}, correct?",
     transitions: {
-      'YES': 'DISCOVER',
-      'NO': 'COLLECT_NAME'
+      'yes': 'COLLECT_NAME',
+      'no': 'START',
+      '*': 'START'
     },
     validation: (input: string) => ['yes', 'no'].includes(input.toLowerCase())
   },
+  
+  COLLECT_NAME: {
+    prompt: "Please share your name.",
+    transitions: {
+      'SKIP': 'COLLECT_PHONE',
+      'NO': 'COLLECT_PHONE',
+      '*': 'COLLECT_PHONE'
+    }
+  },
+  
+  COLLECT_PHONE: {
+    prompt: "Please provide your 10-digit phone number.",
+    transitions: {
+      '*': 'CONFIRM_DETAILS'
+    },
+    validation: (input: string) => /^\d{10}$/.test(input.replace(/\D/g, ''))
+  },
+  
+  CONFIRM_DETAILS: {
+    prompt: "{name}, your phone number is '{phone}'. Is this correct?",
+    transitions: {
+      'yes': 'DISCOVER',
+      'no': 'COLLECT_NAME',
+      '*': 'COLLECT_NAME'
+    },
+    validation: (input: string) => ['yes', 'no'].includes(input.toLowerCase())
+  },
+  
   DISCOVER: {
     prompt: "How may I assist you today?\n1. Menu and pricing information\n2. Current offers and promotions\n3. Restaurant timings\n4. Location and directions\n5. Make a new booking\n6. Modify existing booking\n7. Cancel booking",
     transitions: {
@@ -50,113 +65,113 @@ export const states: { [key: string]: StateConfig } = {
       '2': 'PROVIDE_INFO',
       '3': 'PROVIDE_INFO',
       '4': 'PROVIDE_INFO',
-      '5': 'COLLECT_DATE',
+      '5': 'COLLECT_DATE_TIME',
       '6': 'COLLECT_BOOKING_REF',
       '7': 'COLLECT_BOOKING_REF',
       '*': 'DISCOVER'
     },
     validation: (input: string) => ['1', '2', '3', '4', '5', '6', '7'].includes(input)
   },
-  PROVIDE_INFO: {
-    prompt: "{enquiry_response}",
+  
+  COLLECT_DATE_TIME: {
+    prompt: "What's your preferred date and time for dining?",
     transitions: {
-      '*': 'ASK_MORE_HELP'
+      '*': 'COLLECT_PAX_SIZE'
     }
   },
-  ASK_MORE_HELP: {
-    prompt: "Is there anything else you would like to know? (Yes/No)",
-    transitions: {
-      'YES': 'DISCOVER',
-      'NO': 'END'
-    },
-    validation: (input: string) => ['yes', 'no'].includes(input.toLowerCase())
-  },
-  COLLECT_DATE: {
-    prompt: "Please let me know your preferred date and time for dining (e.g., 25th May, 7:30 PM).",
-    transitions: {
-      '*': 'COLLECT_PAX'
-    }
-  },
-  COLLECT_PAX: {
+  
+  COLLECT_PAX_SIZE: {
     prompt: "How many guests will be dining?",
     transitions: {
       '*': 'CONFIRM_BOOKING'
     },
-    validation: (input: string) => /^\d+$/.test(input) && parseInt(input) > 0
+    validation: (input: string) => !isNaN(Number(input)) && Number(input) > 0
   },
+  
   CONFIRM_BOOKING: {
-    prompt: "I've found a table for {pax_size} guests on {date_time} at our {location} outlet. Would you like me to proceed with the booking? (Yes/No)",
+    prompt: "Booking details: {paxSize} guests on {dateTime} at {location}. Would you like to confirm?",
     transitions: {
       'YES': 'BOOKING_CONFIRMED',
-      'NO': 'ASK_MORE_HELP'
+      'NO': 'COLLECT_DATE_TIME',
+      'MODIFY': 'COLLECT_DATE_TIME'
+    },
+    validation: (input: string) => ['yes', 'no', 'modify'].includes(input.toLowerCase())
+  },
+  
+  BOOKING_CONFIRMED: {
+    prompt: "Your booking is confirmed! Reference number: {bookingRef}. Would you like to know about our current offers or menu?",
+    transitions: {
+      'yes': 'PROVIDE_INFO',
+      'no': 'END',
+      '*': 'END'
     },
     validation: (input: string) => ['yes', 'no'].includes(input.toLowerCase())
   },
-  BOOKING_CONFIRMED: {
-    prompt: "Great! Your booking is confirmed. Your booking reference is {booking_ref}. We look forward to serving you!",
-    transitions: {
-      '*': 'ASK_MORE_HELP'
-    }
-  },
+  
   COLLECT_BOOKING_REF: {
     prompt: "Please provide your booking reference number.",
     transitions: {
       '*': 'VERIFY_BOOKING'
-    }
+    },
+    validation: (input: string) => /^BN\d{6}$/.test(input)
   },
+  
   VERIFY_BOOKING: {
-    prompt: "I've found your booking. What would you like to do?\n1. Modify date/time\n2. Change number of guests\n3. Cancel booking",
+    prompt: "Would you like to modify or cancel your booking?",
     transitions: {
-      '1': 'COLLECT_NEW_DATE',
-      '2': 'COLLECT_NEW_PAX',
-      '3': 'CONFIRM_CANCELLATION',
-      '*': 'VERIFY_BOOKING'
+      'modify': 'COLLECT_NEW_DATE_TIME',
+      'cancel': 'CONFIRM_CANCELLATION',
+      '*': 'DISCOVER'
     },
-    validation: (input: string) => ['1', '2', '3'].includes(input)
+    validation: (input: string) => ['modify', 'cancel'].includes(input.toLowerCase())
   },
-  COLLECT_NEW_DATE: {
-    prompt: "Please provide your preferred new date and time.",
+  
+  COLLECT_NEW_DATE_TIME: {
+    prompt: "What's your preferred new date and time?",
     transitions: {
       '*': 'CONFIRM_MODIFICATION'
     }
   },
-  COLLECT_NEW_PAX: {
-    prompt: "Please provide the new number of guests.",
-    transitions: {
-      '*': 'CONFIRM_MODIFICATION'
-    },
-    validation: (input: string) => /^\d+$/.test(input) && parseInt(input) > 0
-  },
+  
   CONFIRM_MODIFICATION: {
-    prompt: "I can modify your booking to {new_date_time}{new_pax_size}. Would you like to proceed? (Yes/No)",
+    prompt: "New booking time: {newDateTime}. Would you like to confirm this change?",
     transitions: {
-      'YES': 'MODIFICATION_CONFIRMED',
-      'NO': 'ASK_MORE_HELP'
+      'yes': 'MODIFICATION_CONFIRMED',
+      'no': 'COLLECT_NEW_DATE_TIME',
+      '*': 'COLLECT_NEW_DATE_TIME'
     },
     validation: (input: string) => ['yes', 'no'].includes(input.toLowerCase())
   },
-  MODIFICATION_CONFIRMED: {
-    prompt: "Your booking has been successfully modified. Your updated booking reference is {booking_ref}.",
-    transitions: {
-      '*': 'ASK_MORE_HELP'
-    }
-  },
+  
   CONFIRM_CANCELLATION: {
-    prompt: "Are you sure you want to cancel your booking for {date_time}? (Yes/No)",
+    prompt: "Would you like to proceed with canceling your booking?",
     transitions: {
-      'YES': 'CANCELLATION_CONFIRMED',
-      'NO': 'ASK_MORE_HELP'
+      'yes': 'CANCELLATION_CONFIRMED',
+      'no': 'DISCOVER',
+      '*': 'DISCOVER'
     },
     validation: (input: string) => ['yes', 'no'].includes(input.toLowerCase())
   },
-  CANCELLATION_CONFIRMED: {
-    prompt: "Your booking has been cancelled. We hope to serve you again soon!",
+  
+  PROVIDE_INFO: {
+    prompt: "{enquiryResponse}",
     transitions: {
       '*': 'ASK_MORE_HELP'
     }
   },
+  
+  ASK_MORE_HELP: {
+    prompt: "Would you like help with anything else?",
+    transitions: {
+      'yes': 'DISCOVER',
+      'no': 'END',
+      '*': 'END'
+    },
+    validation: (input: string) => ['yes', 'no'].includes(input.toLowerCase())
+  },
+  
   END: {
-    prompt: "Thank you for choosing Barbeque Nation! Have a great day!",
+    prompt: "Thank you for choosing Barbeque Nation. Have a great day!",
     transitions: {
       '*': 'START'
     }

@@ -3,36 +3,21 @@ import { ErrorBoundary } from 'react-error-boundary';
 import Head from 'next/head';
 import '../styles/globals.css';
 
-interface FallbackProps {
-  error: Error;
-  resetErrorBoundary: () => void;
-}
-
-function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
+function ErrorFallback({ error }: { error: Error }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-gray-800 mb-4">
-          Something went wrong
-        </h1>
-        <p className="text-gray-600 mb-8">
+    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <div className="p-8 bg-white rounded-lg shadow-xl">
+        <h2 className="text-2xl font-bold text-red-600 mb-4">Something went wrong:</h2>
+        <pre className="text-sm overflow-auto bg-gray-100 p-4 rounded">
           {error.message}
-        </p>
+        </pre>
         <button
-          onClick={resetErrorBoundary}
-          className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors"
+          onClick={() => window.location.reload()}
+          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
         >
-          Try Again
+          Try again
         </button>
       </div>
-    </div>
-  );
-}
-
-function Layout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {children}
     </div>
   );
 }
@@ -43,15 +28,8 @@ export default function App({ Component, pageProps }: AppProps) {
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
-      <ErrorBoundary
-        FallbackComponent={ErrorFallback}
-        onReset={() => {
-          window.location.reload();
-        }}
-      >
-        <Layout>
-          <Component {...pageProps} />
-        </Layout>
+      <ErrorBoundary FallbackComponent={ErrorFallback}>
+        <Component {...pageProps} />
       </ErrorBoundary>
     </>
   );

@@ -1,0 +1,23 @@
+restaurant,day_range,meal_type,opening_time,closing_time,last_entry,special_notes
+BBQ Nation Connaught Place,Monday-Thursday,Lunch,12:00 PM,4:00 PM,3:00 PM,
+BBQ Nation Connaught Place,Monday-Thursday,Dinner,6:30 PM,11:00 PM,10:00 PM,
+BBQ Nation Connaught Place,Friday-Sunday,Lunch,12:00 PM,4:00 PM,3:00 PM,
+BBQ Nation Connaught Place,Friday-Sunday,Dinner,6:30 PM,11:30 PM,10:30 PM,Extended hours on weekends
+BBQ Nation Vasant Kunj,Monday-Friday,Lunch,12:00 PM,5:00 PM,4:00 PM,Extended lunch hours
+BBQ Nation Vasant Kunj,Monday-Friday,Dinner,6:00 PM,12:00 AM,11:00 PM,
+BBQ Nation Vasant Kunj,Saturday-Sunday,Lunch,11:30 AM,5:00 PM,4:00 PM,Early opening on weekends
+BBQ Nation Vasant Kunj,Saturday-Sunday,Dinner,6:00 PM,12:30 AM,11:30 PM,Extended hours on weekends
+BBQ Nation Unity Mall Janakpuri,Monday-Friday,Lunch,12:00 PM,5:00 PM,4:00 PM,
+BBQ Nation Unity Mall Janakpuri,Monday-Friday,Dinner,6:00 PM,12:00 AM,11:00 PM,
+BBQ Nation Unity Mall Janakpuri,Saturday-Sunday,Lunch,12:00 PM,5:00 PM,4:00 PM,
+BBQ Nation Unity Mall Janakpuri,Saturday-Sunday,Dinner,6:00 PM,12:30 AM,11:30 PM,Extended hours on weekends
+BBQ Nation Indiranagar,Monday-Thursday,Lunch,12:00 PM,3:30 PM,2:30 PM,
+BBQ Nation Indiranagar,Monday-Thursday,Dinner,7:00 PM,11:00 PM,10:00 PM,
+BBQ Nation Indiranagar,Friday-Sunday,Lunch,12:00 PM,4:00 PM,3:00 PM,Extended lunch hours on weekends
+BBQ Nation Indiranagar,Friday-Sunday,Dinner,7:00 PM,11:30 PM,10:30 PM,Extended hours on weekends
+BBQ Nation Electronic City,All Days,Lunch,12:00 PM,4:00 PM,3:00 PM,Same hours all week
+BBQ Nation Electronic City,All Days,Dinner,6:30 PM,11:00 PM,10:00 PM,Same hours all week
+BBQ Nation Whitefield,Monday-Friday,Lunch,12:30 PM,3:30 PM,2:30 PM,
+BBQ Nation Whitefield,Monday-Friday,Dinner,7:00 PM,11:00 PM,10:00 PM,
+BBQ Nation Whitefield,Saturday-Sunday,Lunch,12:00 PM,4:00 PM,3:00 PM,Extended lunch hours on weekends
+BBQ Nation Whitefield,Saturday-Sunday,Dinner,6:30 PM,11:30 PM,10:30 PM,Extended hours on weekends 

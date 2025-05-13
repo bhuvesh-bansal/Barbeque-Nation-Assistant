@@ -1,52 +1,60 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { google } from 'googleapis';
+import { GoogleSheetsLogger } from '../../lib/googleSheets';
 import { ConversationLog } from '../../types';
 
+// API handler for logging conversations to Google Sheets
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  // Only allow POST requests
   if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Method not allowed' });
+    return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
   try {
-    const log: ConversationLog = req.body;
+    // Get the conversation log from the request body
+    const log: ConversationLog = req.body.log ? JSON.parse(req.body.log) : req.body;
 
-    const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS || '{}'),
-      scopes: ['https://www.googleapis.com/auth/spreadsheets']
-    });
+    // Validate required fields
+    if (!log.modality || !log.callTime || !log.callOutcome || !log.callSummary) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Missing required fields' 
+      });
+    }
 
-    const sheets = google.sheets({ version: 'v4', auth });
+    // Initialize Google Sheets logger
+    const credentials = JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS || '{}');
     const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
-    const sheetName = 'Conversations';
 
-    const row = [
-      log.modality,
-      log.callTime,
-      log.phoneNumber || 'N/A',
-      log.callOutcome,
-      log.roomName || 'N/A',
-      log.bookingDate || 'N/A',
-      log.bookingTime || 'N/A',
-      log.numberOfGuests?.toString() || 'N/A',
-      log.customerName || 'N/A',
-      log.callSummary
-    ];
+    if (!credentials || !Object.keys(credentials).length || !spreadsheetId) {
+      return res.status(500).json({
+        success: false,
+        message: 'Google Sheets configuration missing'
+      });
+    }
 
-    await sheets.spreadsheets.values.append({
-      spreadsheetId,
-      range: `${sheetName}!A:J`,
-      valueInputOption: 'RAW',
-      requestBody: {
-        values: [row]
-      }
+    const sheetsLogger = new GoogleSheetsLogger(credentials, spreadsheetId);
+    
+    // Initialize sheet if needed
+    await sheetsLogger.initializeSheet();
+
+    // Log the conversation
+    await sheetsLogger.logConversation(log);
+
+    // Return success response
+    return res.status(200).json({
+      success: true,
+      message: 'Conversation logged successfully'
     });
-
-    res.status(200).json({ message: 'Conversation logged successfully' });
-  } catch (error) {
-    console.error('Failed to log conversation:', error);
-    res.status(500).json({ message: 'Failed to log conversation' });
+  } catch (error: any) {
+    console.error('Error logging conversation:', error);
+    
+    // Return error response
+    return res.status(500).json({
+      success: false,
+      message: `Failed to log conversation: ${error.message}`
+    });
   }
 } 
