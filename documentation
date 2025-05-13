@@ -1,0 +1,61 @@
+# Barbeque Nation Assistant - Project Documentation
+
+## Introduction
+The Barbeque Nation Assistant is a conversational chatbot designed to enhance customer interaction and streamline operations for Barbeque Nation. It integrates a conversational flow, a knowledge base, and post-call configurations to provide a seamless user experience. The project is built with a focus on modularity, scalability, and clean code practices.
+
+---
+
+## Features
+1. **Conversational Flow**:
+   - Handles dynamic user inputs and provides context-aware responses.
+   - Manages state transitions using a state machine.
+
+2. **Knowledge Base Integration**:
+   - Stores and retrieves information efficiently.
+   - Supports semantic search for relevant data.
+
+3. **Post-Call Configuration**:
+   - Automates tasks such as logging conversations and generating insights.
+   - Includes sentiment analysis and performance tracking.
+
+4. **Chatbot Configuration**:
+   - Customizable settings for different use cases.
+   - Supports integration with APIs for dynamic data retrieval.
+
+---
+
+## Technologies Used
+- **Programming Languages**: Java, JavaScript, Python.
+- **Frontend**: React (if applicable).
+- **Backend**: Node.js, Firebase, Supabase.
+- **AI Services**: OpenAI GPT-3.5-turbo for natural language understanding.
+- **Database**: Firebase, Supabase.
+- **Testing Tools**: Postman, Selenium WebDriver.
+- **Version Control**: Git, GitHub.
+- **Project Management**: Agile practices, Jira.
+
+---
+
+## System Architecture
+The system is designed with a modular architecture:
+1. **State Machine**:
+   - Manages the conversational flow and transitions between states.
+   - Ensures a smooth and logical user experience.
+
+2. **Knowledge Base**:
+   - Stores structured data for quick retrieval.
+   - Integrated with the chatbot for context-aware responses.
+
+3. **AI Service**:
+   - Processes user inputs and generates dynamic responses.
+   - Uses OpenAI GPT-3.5-turbo for natural language understanding.
+
+4. **Post-Call Configuration**:
+   - Automates post-call tasks such as logging and analysis.
+   - Provides insights into conversation performance.
+
+---
+
+## Setup and Installation
+1. Clone the repository:
+   git clone https://github.com/bhuvesh-bansal/Barbeque-Nation-Assistant.git
