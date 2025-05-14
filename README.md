@@ -1,6 +1,6 @@
-# AgentOps Implementation
+# ChatBot
 
-This is an implementation of the AgentOps template for building an AI-driven conversational system with knowledge base integration and post-call analysis.
+This is an implementation of the ChatBot for building an AI-driven conversational system with knowledge base integration and post-call analysis.
 
 ## Features
 
